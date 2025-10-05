@@ -28,12 +28,31 @@ client.once('ready', () => {
   }
 });
 
+// Root endpoint untuk test ping GitHub
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    message: 'GitHub Discord PR Bot is running',
+    endpoints: {
+      health: '/health',
+      webhook: '/webhook/github (POST)'
+    }
+  });
+});
+
+app.post('/', (req, res) => {
+  console.log('⚠️ Request diterima di root path /, redirect ke /webhook/github');
+  res.status(200).send('Please use /webhook/github endpoint');
+});
+
 // Endpoint webhook untuk GitHub
 app.post('/webhook/github', (req, res) => {
   const event = req.headers['x-github-event'];
+  console.log(`📥 Webhook diterima: ${event}`);
 
   // Hanya proses event pull request
   if (event !== 'pull_request') {
+    console.log(`ℹ️ Event ${event} diabaikan`);
     return res.status(200).send('Event diabaikan');
   }
 
