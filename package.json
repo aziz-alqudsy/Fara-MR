@@ -1,0 +1,21 @@
+{
+  "name": "github-discord-pr-bot",
+  "version": "1.0.0",
+  "description": "Bot Discord untuk notifikasi PR baru dari GitHub organization",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": ["discord", "github", "webhook", "bot"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "express": "^4.18.2",
+    "dotenv": "^16.4.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+}
