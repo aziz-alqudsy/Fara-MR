@@ -97,6 +97,34 @@ Bot akan berjalan di `http://localhost:3000`
 2. Buat PR baru di repository GitHub yang sudah di-setup webhook-nya
 3. Notifikasi akan muncul di channel Discord yang sudah dikonfigurasi
 
+## Contoh Notifikasi Discord
+
+Ketika ada PR baru dibuat, bot akan mengirim pesan embed seperti ini di Discord channel:
+
+```
+📝 Pull Request Baru Dibuat!
+
+Judul: Add user authentication feature
+Author: johndoe
+Status: open
+
+Deskripsi:
+This PR adds JWT-based authentication system with login and registration endpoints.
+
+Branch: feature/auth → main
+Repository: my-organization/my-repo
+
+🔗 Lihat PR: https://github.com/my-organization/my-repo/pull/123
+🔗 Repository: https://github.com/my-organization/my-repo
+```
+
+Pesan akan ditampilkan dalam format **Discord Embed** dengan:
+- Warna hijau untuk PR baru
+- Icon 📝 di judul
+- Informasi lengkap PR (judul, author, status, deskripsi, branch)
+- Link clickable ke PR dan repository
+- Timestamp kapan notifikasi dikirim
+
 ## Struktur Project
 
 ```
