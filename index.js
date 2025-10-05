@@ -88,7 +88,14 @@ app.post('/webhook/github', (req, res) => {
 
   // Kirim ke Discord
   if (discordChannel) {
-    discordChannel.send({ embeds: [embed] })
+    // Mention role jika DISCORD_ROLE_ID tersedia
+    const roleId = process.env.DISCORD_ROLE_ID;
+    const content = roleId ? `<@&${roleId}>` : undefined;
+
+    discordChannel.send({
+      content: content,
+      embeds: [embed]
+    })
       .then(() => {
         console.log(`✅ Notifikasi PR terkirim: ${pr.title}`);
         res.status(200).send('Webhook diterima dan notifikasi terkirim');

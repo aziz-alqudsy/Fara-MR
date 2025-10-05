@@ -8,6 +8,7 @@ Bot Discord yang otomatis memposting notifikasi setiap ada Pull Request baru yan
 - 📊 Informasi lengkap PR (judul, deskripsi, author, branch, status)
 - 🎨 Embed Discord yang menarik
 - 🔗 Link langsung ke PR dan repository
+- 🔔 Mention role untuk notifikasi tim (opsional)
 
 ## Prerequisites
 
@@ -39,14 +40,17 @@ npm install
 5. Aktifkan "MESSAGE CONTENT INTENT" di bagian Privileged Gateway Intents
 6. Pergi ke tab "OAuth2" → "URL Generator"
 7. Pilih scope: `bot`
-8. Pilih permissions: `Send Messages`, `Embed Links`, `Read Message History`
+8. Pilih permissions: `Send Messages`, `Embed Links`, `Read Message History`, `Mention Everyone` (untuk mention role)
 9. Copy URL yang dihasilkan dan buka di browser untuk invite bot ke server Anda
 
-### 4. Dapatkan Channel ID Discord
+### 4. Dapatkan Channel ID dan Role ID Discord
 
 1. Aktifkan Developer Mode di Discord (Settings → Advanced → Developer Mode)
 2. Klik kanan pada channel tempat Anda ingin menerima notifikasi
 3. Klik "Copy Channel ID"
+4. (Opsional) Untuk mention role saat ada PR baru:
+   - Klik kanan pada role yang ingin di-mention (contoh: @fara-techlab)
+   - Klik "Copy Role ID"
 
 ### 5. Konfigurasi Environment Variables
 
@@ -59,8 +63,11 @@ cp .env.example .env
 ```env
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
 DISCORD_CHANNEL_ID=your_channel_id_here
+DISCORD_ROLE_ID=your_role_id_here  # Opsional, untuk mention role
 PORT=3000
 ```
+
+**Catatan:** `DISCORD_ROLE_ID` bersifat opsional. Jika diisi, bot akan mention role tersebut setiap kali ada PR baru. Jika tidak diisi, bot hanya mengirim notifikasi tanpa mention.
 
 ### 6. Jalankan Bot
 
@@ -148,6 +155,11 @@ Pesan akan ditampilkan dalam format **Discord Embed** dengan:
 - Pastikan bot punya permission untuk mengirim pesan di channel tersebut
 - Cek logs server untuk error
 
+### Role tidak ter-mention
+- Pastikan `DISCORD_ROLE_ID` sudah diisi dengan benar di file `.env`
+- Pastikan bot memiliki permission `Mention Everyone` saat invite
+- Pastikan role yang ingin di-mention memiliki setting "Allow anyone to @mention this role" aktif di Discord Server Settings → Roles
+
 ### Webhook GitHub tidak terkirim
 - Pastikan URL webhook bisa diakses dari internet (gunakan ngrok untuk testing lokal)
 - Cek "Recent Deliveries" di GitHub webhook settings untuk melihat status delivery
@@ -198,6 +210,7 @@ git push -u origin main
 
    - Key: `DISCORD_BOT_TOKEN` → Value: `<your-discord-bot-token>`
    - Key: `DISCORD_CHANNEL_ID` → Value: `<your-discord-channel-id>`
+   - Key: `DISCORD_ROLE_ID` → Value: `<your-discord-role-id>` (opsional, untuk mention role)
    - Key: `PORT` → Value: `3000`
 
 5. **Deploy**
