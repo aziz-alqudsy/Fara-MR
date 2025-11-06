@@ -9,6 +9,7 @@ Bot Discord & Telegram yang otomatis memposting notifikasi setiap ada Pull Reque
 - 🎨 Embed Discord yang menarik & format Telegram yang rapi
 - 🔗 Link langsung ke PR dan repository
 - 🔔 Mention role untuk notifikasi tim (Discord)
+- 👥 Mention users di Telegram untuk notifikasi langsung
 - 🧵 Support Telegram Topics/Forum - posting ke topic tertentu dalam grup
 - 🔄 Dual bot support - bisa aktifkan Discord saja, Telegram saja, atau keduanya
 
@@ -137,12 +138,42 @@ Namun, **jika grup menggunakan Topics/Forum**, bot harus jadi admin dengan permi
 - Jika tidak ada Thread ID atau dikosongkan, bot akan posting ke general chat grup
 - Thread ID hanya berlaku jika bot sudah jadi admin dengan permission "Manage Topics"
 
-#### 5.5. Test Bot
+#### 5.5. Mention Users di Telegram (Opsional)
+
+**Jika ingin bot mention users tertentu di setiap notifikasi PR:**
+
+1. **Dapatkan Username Telegram**
+   - Setiap user yang ingin di-mention harus punya username Telegram (bukan display name)
+   - Username adalah yang dimulai dengan `@` di profile (contoh: `@johndoe`)
+   - Bisa dilihat di Settings → Username
+   - User yang tidak punya username **tidak bisa** di-mention
+
+2. **Konfigurasi TELEGRAM_USERNAMES di .env**
+   - Format: pisahkan dengan koma, **tanpa simbol @**
+   - Contoh: `TELEGRAM_USERNAMES=johndoe,janedoe,developer1`
+
+3. **Limitasi Penting**
+   - ⚠️ Telegram **hanya notify 4-5 mention pertama** per message
+   - Jika ada lebih dari 5 usernames, yang setelah user ke-5 **tidak akan dapat notifikasi**
+   - Untuk grup besar, pertimbangkan gunakan Telegram Topics saja (semua subscriber auto-notify)
+
+**Contoh hasil mention:**
+```
+@johndoe @janedoe @developer1
+
+🔔 Pull Request Baru
+
+Add authentication feature
+...
+```
+
+#### 5.6. Test Bot
 
 Setelah semua dikonfigurasi:
 1. Pastikan bot sudah running (`npm start`)
 2. Kirim command `/test` di grup (atau di topic)
 3. Bot akan mengirim pesan test untuk memastikan koneksi berhasil
+4. Jika ada TELEGRAM_USERNAMES, bot akan test mention users tersebut
 
 ### 6. Konfigurasi Environment Variables
 
@@ -177,6 +208,7 @@ PORT=3000
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 TELEGRAM_CHAT_ID=-1001234567890
 # TELEGRAM_THREAD_ID=12345  # Opsional, untuk posting ke topic
+# TELEGRAM_USERNAMES=user1,user2,user3  # Opsional, untuk mention users
 
 PORT=3000
 ```
@@ -192,6 +224,7 @@ DISCORD_CHANNEL_ID=your_channel_id_here
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 TELEGRAM_CHAT_ID=-1001234567890
 # TELEGRAM_THREAD_ID=12345  # Opsional, untuk posting ke topic
+# TELEGRAM_USERNAMES=user1,user2,user3  # Opsional, untuk mention users
 
 PORT=3000
 ```
@@ -202,6 +235,7 @@ PORT=3000
 - Jika hanya Telegram dikonfigurasi → notifikasi hanya ke Telegram
 - Jika keduanya dikonfigurasi → notifikasi ke Discord DAN Telegram
 - `TELEGRAM_THREAD_ID` opsional - jika diisi, bot posting ke topic tertentu; jika kosong, posting ke general chat
+- `TELEGRAM_USERNAMES` opsional - jika diisi, bot akan mention users tersebut di setiap notifikasi PR (format: `user1,user2,user3` tanpa @)
 
 ### 7. Jalankan Bot
 
@@ -300,8 +334,28 @@ Pesan akan ditampilkan dalam format **Discord Embed** dengan:
 
 Ketika ada PR baru dibuat, bot akan mengirim pesan seperti ini di Telegram grup/topic:
 
+**Tanpa mentions:**
 ```
 🔔 Pull Request Baru
+
+Add user authentication feature
+
+👤 Author: johndoe
+📦 Repository: my-organization/my-repo
+🌿 Branch: feature/auth → main
+📊 Status: ✅ Ready for Review
+
+📝 Deskripsi:
+This PR adds JWT-based authentication system with login and registration endpoints.
+
+🔗 Lihat Pull Request
+```
+
+**Dengan mentions (jika TELEGRAM_USERNAMES dikonfigurasi):**
+```
+🔔 Pull Request Baru
+
+@johndoe @janedoe @developer1
 
 Add user authentication feature
 
@@ -319,6 +373,7 @@ This PR adds JWT-based authentication system with login and registration endpoin
 Pesan akan ditampilkan dengan:
 - Format Markdown yang rapi
 - Link clickable ke PR, repository, dan profile author
+- User mentions (jika dikonfigurasi) - 4-5 user pertama akan dapat notifikasi
 - Jika di grup dengan Topics: posting otomatis ke topic yang dikonfigurasi
 - Informasi lengkap dan mudah dibaca
 
@@ -382,6 +437,13 @@ Pesan akan ditampilkan dengan:
 - Chat ID salah atau bot belum ditambahkan ke grup
 - Pastikan bot sudah ada di grup sebelum menjalankan
 - Gunakan Web API untuk mendapatkan Chat ID yang benar: `https://api.telegram.org/botYOUR_TOKEN/getUpdates`
+
+**Mentions tidak bekerja / User tidak dapat notifikasi**
+- Pastikan user yang di-mention memiliki **username Telegram** (bukan hanya display name)
+- Format harus tanpa `@` di `.env`: `TELEGRAM_USERNAMES=user1,user2` (BUKAN `@user1,@user2`)
+- Telegram hanya notify **4-5 mention pertama** per message - jika ada lebih dari 5, yang setelahnya tidak dapat notif
+- User harus aktif di grup tersebut (belum keluar/banned)
+- Test dengan command `/test` di grup untuk cek apakah mentions muncul
 
 ### Webhook GitHub
 
@@ -448,6 +510,7 @@ git push -u origin main
    - Key: `TELEGRAM_BOT_TOKEN` → Value: `<your-telegram-bot-token>`
    - Key: `TELEGRAM_CHAT_ID` → Value: `<your-telegram-chat-id>`
    - Key: `TELEGRAM_THREAD_ID` → Value: `<your-thread-id>` (opsional, untuk topic)
+   - Key: `TELEGRAM_USERNAMES` → Value: `user1,user2,user3` (opsional, untuk mention users - tanpa @)
 
    **Wajib:**
    - Key: `PORT` → Value: `3000`

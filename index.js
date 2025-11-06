@@ -107,8 +107,16 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
     const chatId = msg.chat.id;
     const threadId = msg.message_thread_id;
 
-    const testMessage = `✅ Bot is working!\n\n` +
-      `This is a test notification. When PR is created, you will receive similar messages here.`;
+    let testMessage = `✅ Bot is working!\n\n`;
+
+    // Tambahkan mentions jika TELEGRAM_USERNAMES tersedia
+    if (process.env.TELEGRAM_USERNAMES) {
+      const usernames = process.env.TELEGRAM_USERNAMES.split(',').map(u => u.trim());
+      const mentions = usernames.map(username => `@${username}`).join(' ');
+      testMessage += `Mentions: ${mentions}\n\n`;
+    }
+
+    testMessage += `This is a test notification. When PR is created, you will receive similar messages here.`;
 
     telegramBot.sendMessage(chatId, testMessage, {
       message_thread_id: threadId
@@ -215,6 +223,14 @@ app.post('/webhook/github', async (req, res) => {
     const statusText = pr.draft ? 'Draft' : 'Ready for Review';
 
     let telegramMessage = `🔔 *Pull Request Baru*\n\n`;
+
+    // Tambahkan mentions jika TELEGRAM_USERNAMES tersedia
+    if (process.env.TELEGRAM_USERNAMES) {
+      const usernames = process.env.TELEGRAM_USERNAMES.split(',').map(u => u.trim());
+      const mentions = usernames.map(username => `@${username}`).join(' ');
+      telegramMessage += `${mentions}\n\n`;
+    }
+
     telegramMessage += `*${pr.title}*\n\n`;
     telegramMessage += `👤 Author: [${pr.user.login}](${pr.user.html_url})\n`;
     telegramMessage += `📦 Repository: [${repo.full_name}](${repo.html_url})\n`;
