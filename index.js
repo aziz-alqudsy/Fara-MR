@@ -51,11 +51,8 @@ let isTelegramEnabled = false;
 if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
   isTelegramEnabled = true;
 
-  telegramBot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
-
-  telegramBot.on('polling_error', (error) => {
-    console.error('❌ Telegram polling error:', error);
-  });
+  // Disable polling karena hanya untuk webhook (tidak perlu receive commands)
+  telegramBot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
 
   telegramBot.getMe().then((botInfo) => {
     console.log(`✅ Bot Telegram siap! Logged in as @${botInfo.username}`);
@@ -75,53 +72,8 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
     isTelegramEnabled = false;
   });
 
-  // Command untuk mendapatkan Chat ID dan Thread ID
-  telegramBot.onText(/\/getchatid/, (msg) => {
-    const chatId = msg.chat.id;
-    const threadId = msg.message_thread_id;
-
-    let response = `📋 **Chat Information**\n\n`;
-    response += `Chat ID: \`${chatId}\`\n`;
-    response += `Chat Type: ${msg.chat.type}\n`;
-
-    if (msg.chat.title) {
-      response += `Chat Title: ${msg.chat.title}\n`;
-    }
-
-    if (threadId) {
-      response += `\n🧵 **Topic/Thread Information**\n`;
-      response += `Thread ID: \`${threadId}\`\n`;
-      response += `\nGunakan Thread ID ini untuk TELEGRAM_THREAD_ID di .env`;
-    } else {
-      response += `\n💡 Tip: Kirim command ini di dalam topic untuk mendapatkan Thread ID`;
-    }
-
-    telegramBot.sendMessage(chatId, response, {
-      parse_mode: 'Markdown',
-      message_thread_id: threadId
-    });
-  });
-
-  // Command untuk test notifikasi
-  telegramBot.onText(/\/test/, (msg) => {
-    const chatId = msg.chat.id;
-    const threadId = msg.message_thread_id;
-
-    let testMessage = `✅ Bot is working!\n\n`;
-
-    // Tambahkan mentions jika TELEGRAM_USERNAMES tersedia
-    if (process.env.TELEGRAM_USERNAMES) {
-      const usernames = process.env.TELEGRAM_USERNAMES.split(',').map(u => u.trim());
-      const mentions = usernames.map(username => `@${username}`).join(' ');
-      testMessage += `Mentions: ${mentions}\n\n`;
-    }
-
-    testMessage += `This is a test notification. When PR is created, you will receive similar messages here.`;
-
-    telegramBot.sendMessage(chatId, testMessage, {
-      message_thread_id: threadId
-    });
-  });
+  // Note: Telegram commands disabled karena polling=false
+  // Bot hanya digunakan untuk mengirim notifikasi webhook, tidak menerima commands
 } else {
   console.log('ℹ️ Telegram bot tidak dikonfigurasi (TELEGRAM_BOT_TOKEN atau TELEGRAM_CHAT_ID tidak ada)');
 }
