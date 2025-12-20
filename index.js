@@ -174,7 +174,16 @@ app.post('/webhook/github', async (req, res) => {
     const statusEmoji = pr.draft ? '📝' : '✅';
     const statusText = pr.draft ? 'Draft' : 'Ready for Review';
 
-    let telegramMessage = `🔔 *Pull Request Baru*\n\n`;
+    // Helper function untuk escape HTML entities
+    const escapeHtml = (text) => {
+      if (!text) return '';
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    };
+
+    let telegramMessage = `🔔 <b>Pull Request Baru</b>\n\n`;
 
     // Tambahkan mentions jika TELEGRAM_USERNAMES tersedia
     if (process.env.TELEGRAM_USERNAMES) {
@@ -183,21 +192,21 @@ app.post('/webhook/github', async (req, res) => {
       telegramMessage += `${mentions}\n\n`;
     }
 
-    telegramMessage += `*${pr.title}*\n\n`;
-    telegramMessage += `👤 Author: [${pr.user.login}](${pr.user.html_url})\n`;
-    telegramMessage += `📦 Repository: [${repo.full_name}](${repo.html_url})\n`;
-    telegramMessage += `🌿 Branch: \`${pr.head.ref}\` → \`${pr.base.ref}\`\n`;
+    telegramMessage += `<b>${escapeHtml(pr.title)}</b>\n\n`;
+    telegramMessage += `👤 Author: <a href="${pr.user.html_url}">${escapeHtml(pr.user.login)}</a>\n`;
+    telegramMessage += `📦 Repository: <a href="${repo.html_url}">${escapeHtml(repo.full_name)}</a>\n`;
+    telegramMessage += `🌿 Branch: <code>${escapeHtml(pr.head.ref)}</code> → <code>${escapeHtml(pr.base.ref)}</code>\n`;
     telegramMessage += `📊 Status: ${statusEmoji} ${statusText}\n\n`;
 
     if (pr.body) {
       const description = pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body;
-      telegramMessage += `📝 Deskripsi:\n${description}\n\n`;
+      telegramMessage += `📝 Deskripsi:\n${escapeHtml(description)}\n\n`;
     }
 
-    telegramMessage += `🔗 [Lihat Pull Request](${pr.html_url})`;
+    telegramMessage += `🔗 <a href="${pr.html_url}">Lihat Pull Request</a>`;
 
     const telegramOptions = {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       disable_web_page_preview: true
     };
 
