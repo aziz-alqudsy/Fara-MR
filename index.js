@@ -105,157 +105,213 @@ app.post('/', (req, res) => {
   res.status(200).send('Please use /webhook/github endpoint');
 });
 
+// Helper function untuk escape HTML entities
+const escapeHtml = (text) => {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+};
+
+// Helper untuk kirim notifikasi ke semua platform
+async function sendNotifications(notifications) {
+  if (notifications.length === 0) {
+    console.warn('⚠️ Tidak ada bot yang aktif untuk mengirim notifikasi');
+    return null;
+  }
+  const results = await Promise.all(notifications);
+  const successCount = results.filter(r => r.success).length;
+  const failedCount = results.filter(r => !r.success).length;
+  if (successCount > 0) {
+    console.log(`✅ Berhasil mengirim ke ${successCount} platform`);
+  } else {
+    console.error('❌ Gagal mengirim ke semua platform');
+  }
+  return { successCount, failedCount, results };
+}
+
+// Helper untuk build Telegram options
+function buildTelegramOptions() {
+  const options = { parse_mode: 'HTML', disable_web_page_preview: true };
+  if (process.env.TELEGRAM_THREAD_ID) {
+    options.message_thread_id = parseInt(process.env.TELEGRAM_THREAD_ID);
+  }
+  return options;
+}
+
+// Helper untuk build mentions string
+function buildMentions() {
+  if (!process.env.TELEGRAM_USERNAMES) return '';
+  const usernames = process.env.TELEGRAM_USERNAMES.split(',').map(u => u.trim());
+  return usernames.map(u => `@${u}`).join(' ') + '\n\n';
+}
+
 // Endpoint webhook untuk GitHub
 app.post('/webhook/github', async (req, res) => {
   const event = req.headers['x-github-event'];
   console.log(`📥 Webhook diterima: ${event}`);
 
-  // Hanya proses event pull request
-  if (event !== 'pull_request') {
+  const payload = req.body;
+  const repo = payload.repository;
+  const notifications = [];
+
+  // ======== HANDLE EVENT: PULL REQUEST ========
+  if (event === 'pull_request') {
+    // Hanya kirim notifikasi untuk PR yang baru dibuat
+    if (payload.action !== 'opened') {
+      return res.status(200).send('Action diabaikan');
+    }
+
+    const pr = payload.pull_request;
+
+    // Kirim ke Discord
+    if (isDiscordEnabled && discordChannel) {
+      const embed = new EmbedBuilder()
+        .setColor('#0366d6')
+        .setTitle(`🔔 Pull Request Baru: ${pr.title}`)
+        .setURL(pr.html_url)
+        .setAuthor({
+          name: pr.user.login,
+          iconURL: pr.user.avatar_url,
+          url: pr.user.html_url
+        })
+        .addFields(
+          { name: '📦 Repository', value: `[${repo.full_name}](${repo.html_url})`, inline: true },
+          { name: '🌿 Branch', value: `${pr.head.ref} → ${pr.base.ref}`, inline: true },
+          { name: '📊 Status', value: pr.draft ? '📝 Draft' : '✅ Ready for Review', inline: true }
+        )
+        .setDescription(pr.body ? (pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body) : '_Tidak ada deskripsi_')
+        .setTimestamp(new Date(pr.created_at))
+        .setFooter({ text: `${repo.organization?.login || repo.owner.login}` });
+
+      const roleId = process.env.DISCORD_ROLE_ID;
+      const content = roleId ? `<@&${roleId}>` : undefined;
+
+      notifications.push(
+        discordChannel.send({ content, embeds: [embed] })
+          .then(() => { console.log(`✅ Discord: Notifikasi PR terkirim - ${pr.title}`); return { platform: 'Discord', success: true }; })
+          .catch(err => { console.error('❌ Discord: Error mengirim pesan:', err); return { platform: 'Discord', success: false, error: err.message }; })
+      );
+    }
+
+    // Kirim ke Telegram
+    if (isTelegramEnabled && telegramBot) {
+      const statusEmoji = pr.draft ? '📝' : '✅';
+      const statusText = pr.draft ? 'Draft' : 'Ready for Review';
+
+      let msg = `🔔 <b>Pull Request Baru</b>\n\n`;
+      msg += buildMentions();
+      msg += `<b>${escapeHtml(pr.title)}</b>\n\n`;
+      msg += `👤 Author: <a href="${pr.user.html_url}">${escapeHtml(pr.user.login)}</a>\n`;
+      msg += `📦 Repository: <a href="${repo.html_url}">${escapeHtml(repo.full_name)}</a>\n`;
+      msg += `🌿 Branch: <code>${escapeHtml(pr.head.ref)}</code> → <code>${escapeHtml(pr.base.ref)}</code>\n`;
+      msg += `📊 Status: ${statusEmoji} ${statusText}\n\n`;
+      if (pr.body) {
+        const desc = pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body;
+        msg += `📝 Deskripsi:\n${escapeHtml(desc)}\n\n`;
+      }
+      msg += `🔗 <a href="${pr.html_url}">Lihat Pull Request</a>`;
+
+      notifications.push(
+        telegramBot.sendMessage(process.env.TELEGRAM_CHAT_ID, msg, buildTelegramOptions())
+          .then(() => { console.log(`✅ Telegram: Notifikasi PR terkirim - ${pr.title}`); return { platform: 'Telegram', success: true }; })
+          .catch(err => { console.error('❌ Telegram: Error mengirim pesan:', err); return { platform: 'Telegram', success: false, error: err.message }; })
+      );
+    }
+
+  // ======== HANDLE EVENT: PUSH KE MAIN/MASTER ========
+  } else if (event === 'push') {
+    const branch = payload.ref; // contoh: "refs/heads/main"
+    const isMainBranch = branch === 'refs/heads/main' || branch === 'refs/heads/master';
+
+    if (!isMainBranch) {
+      console.log(`ℹ️ Push ke branch ${branch} diabaikan`);
+      return res.status(200).send('Push bukan ke main/master, diabaikan');
+    }
+
+    // Abaikan jika tidak ada commits (misalnya delete branch)
+    if (!payload.commits || payload.commits.length === 0) {
+      return res.status(200).send('Tidak ada commits, diabaikan');
+    }
+
+    const pusher = payload.pusher;
+    const headCommit = payload.head_commit;
+    const branchName = branch.replace('refs/heads/', '');
+    const commitCount = payload.commits.length;
+
+    console.log(`🚀 Push ke ${branchName} oleh ${pusher.name} (${commitCount} commit)`);
+
+    // Kirim ke Discord
+    if (isDiscordEnabled && discordChannel) {
+      const commitList = payload.commits.slice(0, 5)
+        .map(c => `• [\`${c.id.substring(0, 7)}\`](${c.url}) ${c.message.split('\n')[0]}`)
+        .join('\n');
+
+      const embed = new EmbedBuilder()
+        .setColor('#28a745')
+        .setTitle(`🚀 Push Langsung ke ${branchName}`)
+        .setURL(payload.compare)
+        .setAuthor({ name: pusher.name })
+        .addFields(
+          { name: '📦 Repository', value: `[${repo.full_name}](${repo.html_url})`, inline: true },
+          { name: '🌿 Branch', value: branchName, inline: true },
+          { name: '📝 Commits', value: `${commitCount} commit`, inline: true }
+        )
+        .setDescription(commitList)
+        .setTimestamp(new Date(headCommit.timestamp))
+        .setFooter({ text: `${repo.organization?.login || repo.owner.login}` });
+
+      const roleId = process.env.DISCORD_ROLE_ID;
+      const content = roleId ? `<@&${roleId}>` : undefined;
+
+      notifications.push(
+        discordChannel.send({ content, embeds: [embed] })
+          .then(() => { console.log(`✅ Discord: Notifikasi push terkirim`); return { platform: 'Discord', success: true }; })
+          .catch(err => { console.error('❌ Discord: Error mengirim pesan:', err); return { platform: 'Discord', success: false, error: err.message }; })
+      );
+    }
+
+    // Kirim ke Telegram
+    if (isTelegramEnabled && telegramBot) {
+      const commitList = payload.commits.slice(0, 5)
+        .map(c => `• <code>${c.id.substring(0, 7)}</code> ${escapeHtml(c.message.split('\n')[0])}`)
+        .join('\n');
+
+      let msg = `🚀 <b>Push Langsung ke ${escapeHtml(branchName)}</b>\n\n`;
+      msg += buildMentions();
+      msg += `👤 Pusher: <b>${escapeHtml(pusher.name)}</b>\n`;
+      msg += `📦 Repository: <a href="${repo.html_url}">${escapeHtml(repo.full_name)}</a>\n`;
+      msg += `🌿 Branch: <code>${escapeHtml(branchName)}</code>\n`;
+      msg += `📝 Commits: ${commitCount} commit\n\n`;
+      msg += `${commitList}\n\n`;
+      if (commitCount > 5) {
+        msg += `<i>... dan ${commitCount - 5} commit lainnya</i>\n\n`;
+      }
+      msg += `🔗 <a href="${payload.compare}">Lihat Perubahan</a>`;
+
+      notifications.push(
+        telegramBot.sendMessage(process.env.TELEGRAM_CHAT_ID, msg, buildTelegramOptions())
+          .then(() => { console.log(`✅ Telegram: Notifikasi push terkirim`); return { platform: 'Telegram', success: true }; })
+          .catch(err => { console.error('❌ Telegram: Error mengirim pesan:', err); return { platform: 'Telegram', success: false, error: err.message }; })
+      );
+    }
+
+  // ======== EVENT LAIN: ABAIKAN ========
+  } else {
     console.log(`ℹ️ Event ${event} diabaikan`);
     return res.status(200).send('Event diabaikan');
   }
 
-  const payload = req.body;
-  const action = payload.action;
-
-  // Hanya kirim notifikasi untuk PR yang baru dibuat
-  if (action !== 'opened') {
-    return res.status(200).send('Action diabaikan');
-  }
-
-  const pr = payload.pull_request;
-  const repo = payload.repository;
-
-  const notifications = [];
-
-  // ======== KIRIM KE DISCORD ========
-  if (isDiscordEnabled && discordChannel) {
-    const embed = new EmbedBuilder()
-      .setColor('#0366d6')
-      .setTitle(`🔔 Pull Request Baru: ${pr.title}`)
-      .setURL(pr.html_url)
-      .setAuthor({
-        name: pr.user.login,
-        iconURL: pr.user.avatar_url,
-        url: pr.user.html_url
-      })
-      .addFields(
-        { name: '📦 Repository', value: `[${repo.full_name}](${repo.html_url})`, inline: true },
-        { name: '🌿 Branch', value: `${pr.head.ref} → ${pr.base.ref}`, inline: true },
-        { name: '📊 Status', value: pr.draft ? '📝 Draft' : '✅ Ready for Review', inline: true }
-      )
-      .setDescription(pr.body ? (pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body) : '_Tidak ada deskripsi_')
-      .setTimestamp(new Date(pr.created_at))
-      .setFooter({ text: `${repo.organization?.login || repo.owner.login}` });
-
-    // Mention role jika DISCORD_ROLE_ID tersedia
-    const roleId = process.env.DISCORD_ROLE_ID;
-    const content = roleId ? `<@&${roleId}>` : undefined;
-
-    const discordPromise = discordChannel.send({
-      content: content,
-      embeds: [embed]
-    })
-      .then(() => {
-        console.log(`✅ Discord: Notifikasi PR terkirim - ${pr.title}`);
-        return { platform: 'Discord', success: true };
-      })
-      .catch(err => {
-        console.error('❌ Discord: Error mengirim pesan:', err);
-        return { platform: 'Discord', success: false, error: err.message };
-      });
-
-    notifications.push(discordPromise);
-  }
-
-  // ======== KIRIM KE TELEGRAM ========
-  if (isTelegramEnabled && telegramBot) {
-    const statusEmoji = pr.draft ? '📝' : '✅';
-    const statusText = pr.draft ? 'Draft' : 'Ready for Review';
-
-    // Helper function untuk escape HTML entities
-    const escapeHtml = (text) => {
-      if (!text) return '';
-      return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-    };
-
-    let telegramMessage = `🔔 <b>Pull Request Baru</b>\n\n`;
-
-    // Tambahkan mentions jika TELEGRAM_USERNAMES tersedia
-    if (process.env.TELEGRAM_USERNAMES) {
-      const usernames = process.env.TELEGRAM_USERNAMES.split(',').map(u => u.trim());
-      const mentions = usernames.map(username => `@${username}`).join(' ');
-      telegramMessage += `${mentions}\n\n`;
-    }
-
-    telegramMessage += `<b>${escapeHtml(pr.title)}</b>\n\n`;
-    telegramMessage += `👤 Author: <a href="${pr.user.html_url}">${escapeHtml(pr.user.login)}</a>\n`;
-    telegramMessage += `📦 Repository: <a href="${repo.html_url}">${escapeHtml(repo.full_name)}</a>\n`;
-    telegramMessage += `🌿 Branch: <code>${escapeHtml(pr.head.ref)}</code> → <code>${escapeHtml(pr.base.ref)}</code>\n`;
-    telegramMessage += `📊 Status: ${statusEmoji} ${statusText}\n\n`;
-
-    if (pr.body) {
-      const description = pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body;
-      telegramMessage += `📝 Deskripsi:\n${escapeHtml(description)}\n\n`;
-    }
-
-    telegramMessage += `🔗 <a href="${pr.html_url}">Lihat Pull Request</a>`;
-
-    const telegramOptions = {
-      parse_mode: 'HTML',
-      disable_web_page_preview: true
-    };
-
-    // Tambahkan thread_id jika tersedia
-    if (process.env.TELEGRAM_THREAD_ID) {
-      telegramOptions.message_thread_id = parseInt(process.env.TELEGRAM_THREAD_ID);
-    }
-
-    const telegramPromise = telegramBot.sendMessage(
-      process.env.TELEGRAM_CHAT_ID,
-      telegramMessage,
-      telegramOptions
-    )
-      .then(() => {
-        console.log(`✅ Telegram: Notifikasi PR terkirim - ${pr.title}`);
-        return { platform: 'Telegram', success: true };
-      })
-      .catch(err => {
-        console.error('❌ Telegram: Error mengirim pesan:', err);
-        return { platform: 'Telegram', success: false, error: err.message };
-      });
-
-    notifications.push(telegramPromise);
-  }
-
   // Tunggu semua notifikasi terkirim
-  if (notifications.length > 0) {
-    const results = await Promise.all(notifications);
-    const successCount = results.filter(r => r.success).length;
-    const failedCount = results.filter(r => !r.success).length;
-
-    if (successCount > 0) {
-      console.log(`✅ Berhasil mengirim ke ${successCount} platform`);
-      return res.status(200).json({
-        message: 'Webhook diterima',
-        sent: successCount,
-        failed: failedCount,
-        results: results
-      });
-    } else {
-      console.error('❌ Gagal mengirim ke semua platform');
-      return res.status(500).json({
-        message: 'Gagal mengirim notifikasi',
-        results: results
-      });
-    }
-  } else {
-    console.warn('⚠️ Tidak ada bot yang aktif untuk mengirim notifikasi');
+  const result = await sendNotifications(notifications);
+  if (!result) {
     return res.status(200).send('Webhook diterima tapi tidak ada bot yang aktif');
+  }
+  if (result.successCount > 0) {
+    return res.status(200).json({ message: 'Webhook diterima', sent: result.successCount, failed: result.failedCount, results: result.results });
+  } else {
+    return res.status(500).json({ message: 'Gagal mengirim notifikasi', results: result.results });
   }
 });
 
