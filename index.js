@@ -289,6 +289,18 @@ app.get('/health', (req, res) => {
   res.status(200).json(health);
 });
 
+// Test endpoint untuk verifikasi webhook GitHub
+app.get('/webhook/github', (_req, res) => {
+  res.status(200).json({
+    message: 'GitHub Webhook endpoint is ready',
+    note: 'Send POST request with GitHub PR event to test',
+    health: {
+      discord: isDiscordEnabled && discordChannel ? 'ready' : 'not ready',
+      telegram: isTelegramEnabled && telegramBot ? 'ready' : 'not ready'
+    }
+  });
+});
+
 // Jalankan server Express
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
