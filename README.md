@@ -1,13 +1,15 @@
 # GitHub to Discord & Telegram PR Bot
 
-Bot Discord & Telegram yang otomatis memposting notifikasi setiap ada Pull Request baru yang dibuat di GitHub organization.
+Bot Discord & Telegram yang otomatis memposting notifikasi setiap ada Pull Request baru atau push langsung ke branch `main`/`master` di GitHub organization.
 
 ## Fitur
 
 - ✅ Notifikasi otomatis ketika PR baru dibuat
+- 🚀 Notifikasi otomatis ketika ada push langsung ke branch `main` atau `master`
 - 📊 Informasi lengkap PR (judul, deskripsi, author, branch, status)
+- 📝 Informasi lengkap push (pusher, daftar commits, link perbandingan)
 - 🎨 Embed Discord yang menarik & format Telegram yang rapi
-- 🔗 Link langsung ke PR dan repository
+- 🔗 Link langsung ke PR/perubahan dan repository
 - 🔔 Mention role untuk notifikasi tim (Discord)
 - 👥 Mention users di Telegram untuk notifikasi langsung
 - 🧵 Support Telegram Topics/Forum - posting ke topic tertentu dalam grup
@@ -95,17 +97,16 @@ Ada **3 cara** untuk mendapatkan Chat ID:
 3. Copy Chat ID yang diberikan
 4. Setelah dapat Chat ID, bisa remove `@userinfobot` dari grup
 
-**Cara 3: Jalankan bot dulu, lalu gunakan command `/getchatid`**
+**Cara 3: Gunakan Telegram Web API**
 
-1. Konfigurasi `.env` dengan bot token (Chat ID bisa kosong dulu):
-   ```env
-   TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
-   TELEGRAM_CHAT_ID=  # Kosongkan dulu
+1. Tambahkan bot ke grup
+2. Kirim pesan apa saja di grup
+3. Buka URL berikut:
    ```
-2. Jalankan bot: `npm start`
-3. Kirim `/getchatid` di grup
-4. Bot akan reply dengan Chat ID
-5. Stop bot (Ctrl+C), masukkan Chat ID ke `.env`, lalu jalankan lagi
+   https://api.telegram.org/botYOUR_BOT_TOKEN/getUpdates
+   ```
+4. Cari `"chat":{"id":-100xxxxxxxxxx}` di JSON response
+5. Copy angka Chat ID tersebut (termasuk tanda minus `-`)
 
 #### 5.3. Permission Bot di Grup (PENTING!)
 
@@ -167,13 +168,13 @@ Add authentication feature
 ...
 ```
 
-#### 5.6. Test Bot
+#### 5.6. Verifikasi Bot
 
-Setelah semua dikonfigurasi:
-1. Pastikan bot sudah running (`npm start`)
-2. Kirim command `/test` di grup (atau di topic)
-3. Bot akan mengirim pesan test untuk memastikan koneksi berhasil
-4. Jika ada TELEGRAM_USERNAMES, bot akan test mention users tersebut
+Setelah semua dikonfigurasi dan bot sudah running, cek health endpoint:
+```
+http://localhost:3000/health
+```
+Pastikan response menunjukkan `telegram.enabled: true` dan `telegram.ready: "ready"`.
 
 ### 6. Konfigurasi Environment Variables
 
@@ -274,67 +275,42 @@ Anda akan melihat log seperti ini:
        ```
      - Gunakan URL yang diberikan ngrok (contoh: `https://xxxx-xx-xx-xx-xx.ngrok.io/webhook/github`)
    - **Content type**: `application/json`
-   - **Which events would you like to trigger this webhook?**: Pilih "Let me select individual events" → centang **Pull requests**
+   - **Which events would you like to trigger this webhook?**: Pilih "Let me select individual events" → centang:
+     - ✅ **Pull requests**
+     - ✅ **Pushes**
    - **Active**: ✅ Centang
 4. Klik **Add webhook**
 
 ## Testing
 
-1. **Test koneksi bot** (untuk Telegram)
-   - Kirim `/test` di grup/topic Telegram
-   - Bot akan reply untuk memastikan koneksi berhasil
-
-2. **Test webhook GitHub**
+1. **Test webhook GitHub - PR baru**
    - Pastikan bot sudah berjalan dan terkoneksi
    - Buat PR baru di repository GitHub yang sudah di-setup webhook-nya
    - Notifikasi akan muncul di platform yang dikonfigurasi (Discord/Telegram/Keduanya)
+
+2. **Test webhook GitHub - Push ke main**
+   - Push commit langsung ke branch `main` atau `master`
+   - Notifikasi push akan muncul di platform yang dikonfigurasi
 
 3. **Cek health endpoint**
    - Buka browser ke `http://localhost:3000/health`
    - Anda akan melihat status bot dan uptime
 
-## Telegram Bot Commands
-
-Bot Telegram memiliki beberapa command helper:
-
-- `/getchatid` - Mendapatkan Chat ID dan Thread ID (jika di dalam topic)
-- `/test` - Mengirim test notification untuk memastikan bot bekerja
-
 ## Contoh Notifikasi
 
 ### Discord
 
-Ketika ada PR baru dibuat, bot akan mengirim pesan embed seperti ini di Discord channel:
+**Pull Request Baru:**
 
-```
-📝 Pull Request Baru Dibuat!
+Pesan embed dengan warna biru, berisi judul PR, author, branch, status, deskripsi, dan link ke PR.
 
-Judul: Add user authentication feature
-Author: johndoe
-Status: open
+**Push Langsung ke Main:**
 
-Deskripsi:
-This PR adds JWT-based authentication system with login and registration endpoints.
-
-Branch: feature/auth → main
-Repository: my-organization/my-repo
-
-🔗 Lihat PR: https://github.com/my-organization/my-repo/pull/123
-🔗 Repository: https://github.com/my-organization/my-repo
-```
-
-Pesan akan ditampilkan dalam format **Discord Embed** dengan:
-- Warna biru untuk PR baru
-- Icon 🔔 di judul
-- Informasi lengkap PR (judul, author, status, deskripsi, branch)
-- Link clickable ke PR dan repository
-- Timestamp kapan notifikasi dikirim
+Pesan embed dengan warna hijau, berisi nama pusher, branch, jumlah commit, daftar commit (maks 5), dan link perbandingan perubahan.
 
 ### Telegram
 
-Ketika ada PR baru dibuat, bot akan mengirim pesan seperti ini di Telegram grup/topic:
-
-**Tanpa mentions:**
+**Pull Request Baru (tanpa mentions):**
 ```
 🔔 Pull Request Baru
 
@@ -346,36 +322,29 @@ Add user authentication feature
 📊 Status: ✅ Ready for Review
 
 📝 Deskripsi:
-This PR adds JWT-based authentication system with login and registration endpoints.
+This PR adds JWT-based authentication system...
 
 🔗 Lihat Pull Request
 ```
 
-**Dengan mentions (jika TELEGRAM_USERNAMES dikonfigurasi):**
+**Push Langsung ke Main:**
 ```
-🔔 Pull Request Baru
+🚀 Push Langsung ke main
 
 @johndoe @janedoe @developer1
 
-Add user authentication feature
-
-👤 Author: johndoe
+👤 Pusher: johndoe
 📦 Repository: my-organization/my-repo
-🌿 Branch: feature/auth → main
-📊 Status: ✅ Ready for Review
+🌿 Branch: main
+📝 Commits: 2 commit
 
-📝 Deskripsi:
-This PR adds JWT-based authentication system with login and registration endpoints.
+• a1b2c3d fix: update api endpoint
+• d4e5f6g chore: update dependencies
 
-🔗 Lihat Pull Request
+🔗 Lihat Perubahan
 ```
 
-Pesan akan ditampilkan dengan:
-- Format Markdown yang rapi
-- Link clickable ke PR, repository, dan profile author
-- User mentions (jika dikonfigurasi) - 4-5 user pertama akan dapat notifikasi
-- Jika di grup dengan Topics: posting otomatis ke topic yang dikonfigurasi
-- Informasi lengkap dan mudah dibaca
+> Mentions akan muncul di kedua jenis notifikasi jika `TELEGRAM_USERNAMES` dikonfigurasi.
 
 ## Struktur Project
 
@@ -427,11 +396,6 @@ Pesan akan ditampilkan dengan:
 - Jika masih error, coba kosongkan `TELEGRAM_THREAD_ID` untuk posting ke general chat
 - Topics/Forum memerlukan bot sebagai admin, tidak bisa posting sebagai member biasa
 
-**Command `/getchatid` atau `/test` tidak berfungsi**
-- **PENTING:** Bot harus sudah running (`npm start` atau `npm run dev`) sebelum command bisa digunakan
-- Tunggu beberapa detik setelah start bot untuk polling siap (lihat log "Bot Telegram siap")
-- Bot bisa menerima command sebagai member biasa, tidak perlu jadi admin
-- Jika tetap tidak berfungsi, gunakan cara alternatif untuk dapat Chat ID (lihat bagian 5.2 di Setup)
 
 **Error "ETELEGRAM: 400 Bad Request: chat not found"**
 - Chat ID salah atau bot belum ditambahkan ke grup
@@ -450,7 +414,12 @@ Pesan akan ditampilkan dengan:
 **Webhook GitHub tidak terkirim**
 - Pastikan URL webhook bisa diakses dari internet (gunakan ngrok untuk testing lokal)
 - Cek "Recent Deliveries" di GitHub webhook settings untuk melihat status delivery
-- Pastikan event "Pull requests" sudah dicentang di webhook settings
+- Pastikan event **"Pull requests"** dan **"Pushes"** sudah dicentang di webhook settings
+
+**Push ke main tidak mengirim notifikasi**
+- Pastikan event **"Pushes"** sudah dicentang di GitHub webhook settings
+- Notifikasi push hanya trigger untuk push ke branch `main` atau `master`, branch lain diabaikan
+- Pastikan ada commit dalam push tersebut (bukan delete branch)
 
 **Notifikasi tidak ke semua platform**
 - Cek logs untuk melihat platform mana yang gagal
@@ -541,6 +510,7 @@ Setelah deploy berhasil:
    - **Which events would you like to trigger this webhook?**:
      - Pilih **"Let me select individual events"**
      - Centang **"Pull requests"**
+     - Centang **"Pushes"**
      - Uncheck yang lain
    - **Active**: ✅ Centang
 4. Klik **"Add webhook"**
