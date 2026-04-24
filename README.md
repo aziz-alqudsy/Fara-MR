@@ -5,6 +5,7 @@ Bot Discord & Telegram yang otomatis memposting notifikasi setiap ada Pull Reque
 ## Fitur
 
 - ✅ Notifikasi otomatis ketika PR baru dibuat
+- 🔄 Notifikasi otomatis ketika PR diperbarui (ada commit baru di-push ke PR)
 - 🚀 Notifikasi otomatis ketika ada push langsung ke branch `main` atau `master`
 - 📊 Informasi lengkap PR (judul, deskripsi, author, branch, status)
 - 📝 Informasi lengkap push (pusher, daftar commits, link perbandingan)
@@ -284,15 +285,18 @@ Anda akan melihat log seperti ini:
 ## Testing
 
 1. **Test webhook GitHub - PR baru**
-   - Pastikan bot sudah berjalan dan terkoneksi
    - Buat PR baru di repository GitHub yang sudah di-setup webhook-nya
-   - Notifikasi akan muncul di platform yang dikonfigurasi (Discord/Telegram/Keduanya)
+   - Notifikasi 🔔 akan muncul di platform yang dikonfigurasi
 
-2. **Test webhook GitHub - Push ke main**
+2. **Test webhook GitHub - PR diperbarui**
+   - Push commit baru ke branch dari PR yang sudah ada
+   - Notifikasi 🔄 akan muncul sebagai tanda PR diperbarui
+
+3. **Test webhook GitHub - Push ke main**
    - Push commit langsung ke branch `main` atau `master`
    - Notifikasi push akan muncul di platform yang dikonfigurasi
 
-3. **Cek health endpoint**
+4. **Cek health endpoint**
    - Buka browser ke `http://localhost:3000/health`
    - Anda akan melihat status bot dan uptime
 
@@ -310,7 +314,7 @@ Pesan embed dengan warna hijau, berisi nama pusher, branch, jumlah commit, dafta
 
 ### Telegram
 
-**Pull Request Baru (tanpa mentions):**
+**Pull Request Baru:**
 ```
 🔔 Pull Request Baru
 
@@ -323,6 +327,24 @@ Add user authentication feature
 
 📝 Deskripsi:
 This PR adds JWT-based authentication system...
+
+🔗 Lihat Pull Request
+```
+
+**PR Diperbarui (ada commit baru):**
+```
+🔄 PR Diperbarui
+
+@johndoe @janedoe @developer1
+
+Add user authentication feature
+
+👤 Author: johndoe
+📦 Repository: my-organization/my-repo
+🌿 Branch: feature/auth → main
+📊 Status: ✅ Ready for Review
+
+💡 Ada commit baru yang di-push ke PR ini.
 
 🔗 Lihat Pull Request
 ```

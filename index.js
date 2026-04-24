@@ -158,18 +158,20 @@ app.post('/webhook/github', async (req, res) => {
 
   // ======== HANDLE EVENT: PULL REQUEST ========
   if (event === 'pull_request') {
-    // Hanya kirim notifikasi untuk PR yang baru dibuat
-    if (payload.action !== 'opened') {
+    const action = payload.action;
+
+    if (action !== 'opened' && action !== 'synchronize') {
       return res.status(200).send('Action diabaikan');
     }
 
     const pr = payload.pull_request;
+    const isNew = action === 'opened';
 
     // Kirim ke Discord
     if (isDiscordEnabled && discordChannel) {
       const embed = new EmbedBuilder()
-        .setColor('#0366d6')
-        .setTitle(`🔔 Pull Request Baru: ${pr.title}`)
+        .setColor(isNew ? '#0366d6' : '#f0a500')
+        .setTitle(isNew ? `🔔 Pull Request Baru: ${pr.title}` : `🔄 PR Diperbarui: ${pr.title}`)
         .setURL(pr.html_url)
         .setAuthor({
           name: pr.user.login,
@@ -182,7 +184,7 @@ app.post('/webhook/github', async (req, res) => {
           { name: '📊 Status', value: pr.draft ? '📝 Draft' : '✅ Ready for Review', inline: true }
         )
         .setDescription(pr.body ? (pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body) : '_Tidak ada deskripsi_')
-        .setTimestamp(new Date(pr.created_at))
+        .setTimestamp(new Date(pr.updated_at))
         .setFooter({ text: `${repo.organization?.login || repo.owner.login}` });
 
       const roleId = process.env.DISCORD_ROLE_ID;
@@ -200,14 +202,18 @@ app.post('/webhook/github', async (req, res) => {
       const statusEmoji = pr.draft ? '📝' : '✅';
       const statusText = pr.draft ? 'Draft' : 'Ready for Review';
 
-      let msg = `🔔 <b>Pull Request Baru</b>\n\n`;
+      let msg = isNew
+        ? `🔔 <b>Pull Request Baru</b>\n\n`
+        : `🔄 <b>PR Diperbarui</b>\n\n`;
       msg += buildMentions();
       msg += `<b>${escapeHtml(pr.title)}</b>\n\n`;
       msg += `👤 Author: <a href="${pr.user.html_url}">${escapeHtml(pr.user.login)}</a>\n`;
       msg += `📦 Repository: <a href="${repo.html_url}">${escapeHtml(repo.full_name)}</a>\n`;
       msg += `🌿 Branch: <code>${escapeHtml(pr.head.ref)}</code> → <code>${escapeHtml(pr.base.ref)}</code>\n`;
       msg += `📊 Status: ${statusEmoji} ${statusText}\n\n`;
-      if (pr.body) {
+      if (!isNew) {
+        msg += `💡 Ada commit baru yang di-push ke PR ini.\n\n`;
+      } else if (pr.body) {
         const desc = pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body;
         msg += `📝 Deskripsi:\n${escapeHtml(desc)}\n\n`;
       }
