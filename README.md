@@ -344,7 +344,9 @@ Add user authentication feature
 🌿 Branch: feature/auth → main
 📊 Status: ✅ Ready for Review
 
-💡 Ada commit baru yang di-push ke PR ini.
+📝 Commits baru:
+• a1b2c3d fix: handle edge case on login
+• d4e5f6g refactor: cleanup auth middleware
 
 🔗 Lihat Pull Request
 ```
@@ -502,6 +504,9 @@ git push -u origin main
    - Key: `TELEGRAM_CHAT_ID` → Value: `<your-telegram-chat-id>`
    - Key: `TELEGRAM_THREAD_ID` → Value: `<your-thread-id>` (opsional, untuk topic)
    - Key: `TELEGRAM_USERNAMES` → Value: `user1,user2,user3` (opsional, untuk mention users - tanpa @)
+
+   **Untuk GitHub API (commit messages):**
+   - Key: `GITHUB_TOKEN` → Value: `<your-github-token>` (wajib jika repo private)
 
    **Wajib:**
    - Key: `PORT` → Value: `3000`

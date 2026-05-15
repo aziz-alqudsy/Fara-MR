@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
+const https = require('https');
 
 const app = express();
 app.use(express.json());
@@ -147,6 +148,39 @@ function buildMentions() {
   return usernames.map(u => `@${u}`).join(' ') + '\n\n';
 }
 
+// Helper untuk fetch commits dari GitHub API (before...after)
+function fetchCommits(repoFullName, before, after) {
+  return new Promise((resolve) => {
+    const token = process.env.GITHUB_TOKEN;
+    const options = {
+      hostname: 'api.github.com',
+      path: `/repos/${repoFullName}/compare/${before}...${after}`,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'fara-mr-bot',
+        'Accept': 'application/vnd.github+json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(json.commits || []);
+        } catch {
+          resolve([]);
+        }
+      });
+    });
+
+    req.on('error', () => resolve([]));
+    req.end();
+  });
+}
+
 // Endpoint webhook untuk GitHub
 app.post('/webhook/github', async (req, res) => {
   const event = req.headers['x-github-event'];
@@ -167,8 +201,26 @@ app.post('/webhook/github', async (req, res) => {
     const pr = payload.pull_request;
     const isNew = action === 'opened';
 
+    // Fetch commits baru jika PR diperbarui
+    let newCommits = [];
+    if (!isNew && payload.before && payload.after) {
+      newCommits = await fetchCommits(repo.full_name, payload.before, payload.after);
+    }
+
     // Kirim ke Discord
     if (isDiscordEnabled && discordChannel) {
+      let description;
+      if (isNew) {
+        description = pr.body ? (pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body) : '_Tidak ada deskripsi_';
+      } else if (newCommits.length > 0) {
+        description = newCommits.slice(0, 5)
+          .map(c => `• \`${c.sha.substring(0, 7)}\` ${c.commit.message.split('\n')[0]}`)
+          .join('\n');
+        if (newCommits.length > 5) description += `\n_... dan ${newCommits.length - 5} commit lainnya_`;
+      } else {
+        description = '_Ada commit baru yang di-push ke PR ini._';
+      }
+
       const embed = new EmbedBuilder()
         .setColor(isNew ? '#0366d6' : '#f0a500')
         .setTitle(isNew ? `🔔 Pull Request Baru: ${pr.title}` : `🔄 PR Diperbarui: ${pr.title}`)
@@ -183,7 +235,7 @@ app.post('/webhook/github', async (req, res) => {
           { name: '🌿 Branch', value: `${pr.head.ref} → ${pr.base.ref}`, inline: true },
           { name: '📊 Status', value: pr.draft ? '📝 Draft' : '✅ Ready for Review', inline: true }
         )
-        .setDescription(pr.body ? (pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body) : '_Tidak ada deskripsi_')
+        .setDescription(description)
         .setTimestamp(new Date(pr.updated_at))
         .setFooter({ text: `${repo.organization?.login || repo.owner.login}` });
 
@@ -211,12 +263,23 @@ app.post('/webhook/github', async (req, res) => {
       msg += `📦 Repository: <a href="${repo.html_url}">${escapeHtml(repo.full_name)}</a>\n`;
       msg += `🌿 Branch: <code>${escapeHtml(pr.head.ref)}</code> → <code>${escapeHtml(pr.base.ref)}</code>\n`;
       msg += `📊 Status: ${statusEmoji} ${statusText}\n\n`;
-      if (!isNew) {
+
+      if (isNew) {
+        if (pr.body) {
+          const desc = pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body;
+          msg += `📝 Deskripsi:\n${escapeHtml(desc)}\n\n`;
+        }
+      } else if (newCommits.length > 0) {
+        const commitList = newCommits.slice(0, 5)
+          .map(c => `• <code>${c.sha.substring(0, 7)}</code> ${escapeHtml(c.commit.message.split('\n')[0])}`)
+          .join('\n');
+        msg += `📝 Commits baru:\n${commitList}\n`;
+        if (newCommits.length > 5) msg += `<i>... dan ${newCommits.length - 5} commit lainnya</i>\n`;
+        msg += '\n';
+      } else {
         msg += `💡 Ada commit baru yang di-push ke PR ini.\n\n`;
-      } else if (pr.body) {
-        const desc = pr.body.length > 300 ? pr.body.substring(0, 300) + '...' : pr.body;
-        msg += `📝 Deskripsi:\n${escapeHtml(desc)}\n\n`;
       }
+
       msg += `🔗 <a href="${pr.html_url}">Lihat Pull Request</a>`;
 
       notifications.push(
